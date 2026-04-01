@@ -79,7 +79,7 @@ class ServiceController:
 
     def get_overall_status(self) -> str:
         """Return 'all_running', 'all_stopped', or 'partial'."""
-        statuses = [get_service_status(svc.name) for svc in SERVICES]
+        statuses = [get_service_status(svc.service_name) for svc in SERVICES]
         if all(s == "running" for s in statuses):
             return "all_running"
         if all(s in _STOPPED_STATES for s in statuses):
@@ -142,18 +142,18 @@ class ServiceController:
         success = True
         try:
             for svc in SERVICES:
-                if get_service_status(svc.name) == "running":
+                if get_service_status(svc.service_name) == "running":
                     self._emit(on_progress, f"[skip]    {svc.name} — already running")
                     continue
 
                 self._emit(on_progress, f"[start]   {svc.name}")
-                rc, out, err = _ps(f"Start-Service -Name '{svc.name}'")
+                rc, out, err = _ps(f"Start-Service -Name '{svc.service_name}'")
                 if rc != 0:
                     self._emit(on_progress, f"[error]   {svc.name}: {err or out}")
                     success = False
                     break
 
-                if not _wait_for_state(svc.name, "running"):
+                if not _wait_for_state(svc.service_name, "running"):
                     self._emit(on_progress, f"[timeout] {svc.name} did not reach 'running' within 5 min")
                     success = False
                     break
@@ -183,19 +183,19 @@ class ServiceController:
         success = True
         try:
             for svc in reversed(SERVICES):
-                if get_service_status(svc.name) in _STOPPED_STATES:
+                if get_service_status(svc.service_name) in _STOPPED_STATES:
                     self._emit(on_progress, f"[skip]    {svc.name} — already stopped")
                     continue
 
                 self._emit(on_progress, f"[stop]    {svc.name}")
-                rc, out, err = _ps(f"Stop-Service -Name '{svc.name}' -Force")
+                rc, out, err = _ps(f"Stop-Service -Name '{svc.service_name}' -Force")
                 if rc != 0:
                     self._emit(on_progress, f"[error]   {svc.name}: {err or out}")
                     success = False
                     # Keep going — attempt to stop remaining services anyway.
                     continue
 
-                if not _wait_for_state(svc.name, "stopped"):
+                if not _wait_for_state(svc.service_name, "stopped"):
                     self._emit(on_progress, f"[timeout] {svc.name} did not reach 'stopped' within 5 min")
                     success = False
         finally:
