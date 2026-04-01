@@ -1,41 +1,55 @@
 """
-ServiceController — start/stop ArcGIS services in the required order,
-waiting between each step so dependent services have time to initialise.
+ServiceController — start/stop ArcGIS services in the required order
+using PowerShell subprocess calls (no pywin32 dependency required).
 """
 import logging
+import subprocess
 import threading
 import time
-from typing import Callable, List, Optional
-
-import pywintypes
-import win32service
-import win32serviceutil
+from typing import Callable, Optional
 
 from services import SERVICES
 
 log = logging.getLogger(__name__)
 
-_STATE_MAP = {
-    win32service.SERVICE_RUNNING:          "running",
-    win32service.SERVICE_STOPPED:          "stopped",
-    win32service.SERVICE_START_PENDING:    "starting",
-    win32service.SERVICE_STOP_PENDING:     "stopping",
-    win32service.SERVICE_PAUSE_PENDING:    "pausing",
-    win32service.SERVICE_PAUSED:           "paused",
-    win32service.SERVICE_CONTINUE_PENDING: "continuing",
+# Suppress the PowerShell console window when the app has no console of its own.
+_CREATE_NO_WINDOW = 0x08000000
+
+_PS_STATUS_MAP = {
+    "running":         "running",
+    "stopped":         "stopped",
+    "startpending":    "starting",
+    "stoppending":     "stopping",
+    "pausepending":    "pausing",
+    "paused":          "paused",
+    "continuepending": "continuing",
 }
 
 _STOPPED_STATES = {"stopped", "not_found"}
 
 
+def _ps(command: str) -> tuple[int, str, str]:
+    """Run a PowerShell one-liner; return (returncode, stdout, stderr)."""
+    result = subprocess.run(
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
+        capture_output=True,
+        text=True,
+        creationflags=_CREATE_NO_WINDOW,
+    )
+    return result.returncode, result.stdout.strip(), result.stderr.strip()
+
+
 def get_service_status(name: str) -> str:
-    """Return a human-readable service state, or 'not_found' on error."""
-    try:
-        status = win32serviceutil.QueryServiceStatus(name)
-        return _STATE_MAP.get(status[1], "unknown")
-    except pywintypes.error as exc:
-        log.debug("QueryServiceStatus(%r): %s", name, exc)
+    """Return a normalised service state string, or 'not_found' on any error."""
+    rc, out, _ = _ps(
+        f"(Get-Service -Name '{name}' -ErrorAction SilentlyContinue).Status"
+    )
+    if not out:
         return "not_found"
+    status = _PS_STATUS_MAP.get(out.lower().replace(" ", ""), "unknown")
+    if status == "unknown":
+        log.debug("Unrecognised service state %r for %r", out, name)
+    return status
 
 
 def _wait_for_state(
@@ -133,10 +147,9 @@ class ServiceController:
                     continue
 
                 self._emit(on_progress, f"[start]   {svc.name}")
-                try:
-                    win32serviceutil.StartService(svc.name)
-                except pywintypes.error as exc:
-                    self._emit(on_progress, f"[error]   {svc.name}: {exc}")
+                rc, out, err = _ps(f"Start-Service -Name '{svc.name}'")
+                if rc != 0:
+                    self._emit(on_progress, f"[error]   {svc.name}: {err or out}")
                     success = False
                     break
 
@@ -175,10 +188,9 @@ class ServiceController:
                     continue
 
                 self._emit(on_progress, f"[stop]    {svc.name}")
-                try:
-                    win32serviceutil.StopService(svc.name)
-                except pywintypes.error as exc:
-                    self._emit(on_progress, f"[error]   {svc.name}: {exc}")
+                rc, out, err = _ps(f"Stop-Service -Name '{svc.name}' -Force")
+                if rc != 0:
+                    self._emit(on_progress, f"[error]   {svc.name}: {err or out}")
                     success = False
                     # Keep going — attempt to stop remaining services anyway.
                     continue
