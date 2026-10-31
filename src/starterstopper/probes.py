@@ -36,7 +36,11 @@ def http_probe(p: Probe, system: System) -> ProbeResult:
         code = e.code
     except Exception as e:  # URLError, timeout, connection reset, TLS errors
         reason = getattr(e, "reason", e)
-        return ProbeResult(False, f"{type(reason).__name__}: {reason}"[:120])
+        short = {"ConnectionRefusedError": "refused", "ConnectionResetError": "reset",
+                 "TimeoutError": "timeout", "timeout": "timeout", "gaierror": "DNS failed",
+                 "SSLError": "TLS error", "SSLCertVerificationError": "TLS cert untrusted"}
+        name = type(reason).__name__
+        return ProbeResult(False, short.get(name) or f"{name}: {reason}"[:120])
     return ProbeResult(code in p.expect, str(code))
 
 

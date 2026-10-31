@@ -1,5 +1,13 @@
 [
   {
+    "match": "(?i)timed? ?out|timeout.*elapsing|request was canceled",
+    "field": "detail",
+    "status": [
+      "FAIL"
+    ],
+    "hint": "If Portal's validate of one server times out while that server's own REST and admin endpoints answer quickly, check whether the machines were suspended and resumed (host sleep). Processes frozen across a long gap and clock jump can leave Portal wedged. A clean stop and cold boot clears it; resuming does not."
+  },
+  {
     "match": "datastore-queue|datastore-cache",
     "field": "any",
     "status": [

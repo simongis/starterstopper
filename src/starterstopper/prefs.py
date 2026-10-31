@@ -16,7 +16,7 @@ from tkinter import filedialog, messagebox, ttk
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from . import config
-from .config import (APP_DIR, CONFIG_PATH, HEALTH_FORMATS, HOOK_PHASES, SYSTEM_TYPES, Config,
+from .config import (APP_DIR, CONFIG_PATH, HEALTH_FORMATS, HOOK_PHASES, SUSPENDED_ACTIONS, SYSTEM_TYPES, Config,
                      ConfigError, HealthCheck, Hook, Link, Probe, System)
 
 PAD = 4
@@ -426,7 +426,7 @@ class PrefsApp:
         self.right = ttk.Frame(tab)
         self.right.pack(side="left", fill="both", expand=True, padx=(10, 0))
         self.empty_lbl = ttk.Label(tab, text="No systems yet. Click Add to create one.")
-        v = self.v = {k: tk.StringVar() for k in ("name", "type", "host", "vmx", "stop", "ssh_user", "ssh_key",
+        v = self.v = {k: tk.StringVar() for k in ("name", "type", "host", "vmx", "stop", "suspended", "ssh_user", "ssh_key",
                                                   "ssh_port", "settle", "timeout", "interval")}
         b = self.b = {k: tk.BooleanVar() for k in ("enabled", "critical", "utc")}
         for var in (v["name"], v["type"], b["enabled"]):
@@ -463,6 +463,9 @@ class PrefsApp:
                        command=lambda: _browse_file(v["vmx"], "VMX file", [("VMware VM", "*.vmx")])))
         row(1, "", ttk.Checkbutton(self.vm_frame, text="Ensure guest RTC is UTC (Linux guests)", variable=b["utc"]))
         row(2, "Stop timeout (min)", _spin(self.vm_frame, v["stop"], 1, 1440))
+        row(3, "If suspended", ttk.Combobox(self.vm_frame, textvariable=v["suspended"], values=SUSPENDED_ACTIONS,
+                                            state="readonly", width=12),
+            ttk.Label(self.vm_frame, text="coldBoot = resume, shut down cleanly, boot fresh"))
         self.svc_frame = ttk.LabelFrame(f, text="Windows services (internal names, one per line, start order)",
                                         padding=6)
         self.services_txt = tk.Text(self.svc_frame, height=5, width=40, undo=True)
@@ -568,6 +571,7 @@ class PrefsApp:
             b["enabled"].set(s.enabled)
             b["critical"].set(s.critical)
             b["utc"].set(s.ensureUtcRtc)
+            v["suspended"].set(s.onSuspended)
             self.services_txt.delete("1.0", "end")
             self.services_txt.insert("1.0", "\n".join(s.services))
             self.probes_ed.set_items(s.ready.probes)
@@ -608,6 +612,7 @@ class PrefsApp:
         s.type = v["type"].get()
         s.enabled, s.critical, s.ensureUtcRtc = self.b["enabled"].get(), self.b["critical"].get(), self.b["utc"].get()
         s.host, s.vmx, s.stopTimeoutMinutes = v["host"].get().strip(), v["vmx"].get().strip(), stop
+        s.onSuspended = v["suspended"].get() or "resume"
         s.services = [ln.strip() for ln in self.services_txt.get("1.0", "end").splitlines() if ln.strip()]
         s.ssh.user, s.ssh.keyPath, s.ssh.port = v["ssh_user"].get().strip(), v["ssh_key"].get().strip(), port
         s.ready.settleSeconds, s.ready.timeoutMinutes, s.ready.intervalSeconds = settle, timeout, interval

@@ -19,6 +19,7 @@
       "host": "192.0.2.10",
       "critical": true,
       "ensureUtcRtc": true,
+      "onSuspended": "coldBoot",
       "ssh": { "user": "admin", "keyPath": "~\\.ssh\\id_ed25519" },
       "ready": {
         "settleSeconds": 30,

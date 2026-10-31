@@ -219,6 +219,11 @@ class Engine:
             err = prov.preflight(system) or self._ceiling_error(system)
             if err:
                 return fail(err)
+            if state == State.SUSPENDED and system.onSuspended == "coldBoot":
+                err = self._cold_boot_from_suspend(system, prov)
+                if err:
+                    return fail(err)
+                state = State.STOPPED
             if system.type == "vmware" and system.ensureUtcRtc and state == State.STOPPED:
                 if prov.ensure_utc_rtc(system):  # type: ignore[attr-defined]
                     self._say(f"{system.name}: set rtc.diffFromUTC = 0 (UTC hardware clock)")
@@ -249,6 +254,21 @@ class Engine:
             return True
         res.ready.append(system.name)
         return True
+
+    def _cold_boot_from_suspend(self, system: System, prov: Provider) -> str:
+        """A suspended guest resumes with every process frozen across the gap and the clock jumped;
+        long-running server stacks often misbehave afterwards. Resume, shut down cleanly, and let the
+        normal start path boot it fresh. Returns '' or an error."""
+        self._say(f"{system.name}: suspended -- resuming to shut it down cleanly, then cold boot (onSuspended=coldBoot)")
+        err = prov.start(system)
+        if err:
+            return f"resume failed: {err}"
+        self._wait(15)                      # let VMware Tools in the guest answer the shutdown request
+        err = prov.stop(system, system.stopTimeoutMinutes * 60)
+        if err:
+            return f"clean shutdown after resume failed: {err}"
+        self._say(f"{system.name}: shut down cleanly after resume")
+        return ""
 
     def info_probes(self, systems: List[System], res: OpResult) -> None:
         states = self.states(systems)

@@ -33,6 +33,7 @@ REPORT_DIR = DATA_DIR / "reports"
 SYSTEM_TYPES = ("vmware", "windows-service")
 HOOK_PHASES = ("beforeStart", "afterBoot", "afterReady", "beforeStop", "afterStop")
 HEALTH_FORMATS = ("json", "exitcode")
+SUSPENDED_ACTIONS = ("resume", "coldBoot")
 
 DEFAULT_VMRUN = r"C:\Program Files\VMware\VMware Workstation\vmrun.exe"
 DEFAULT_VMRUN_X86 = r"C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"
@@ -96,6 +97,7 @@ class System:
     # vmware
     vmx: str = ""
     ensureUtcRtc: bool = False             # set rtc.diffFromUTC = "0" in the .vmx while off (Linux guests)
+    onSuspended: str = "resume"            # resume | coldBoot (resume, shut down cleanly, boot fresh)
     stopTimeoutMinutes: int = 10
     # windows-service
     services: List[str] = field(default_factory=list)   # internal service names, start order
@@ -231,6 +233,7 @@ def _system(d: Dict[str, Any], i: int) -> System:
         host=d.get("host", "") or "",
         vmx=d.get("vmx", "") or "",
         ensureUtcRtc=bool(d.get("ensureUtcRtc", False)),
+        onSuspended=d.get("onSuspended", "resume") or "resume",
         stopTimeoutMinutes=int(d.get("stopTimeoutMinutes", 10)),
         services=list(d.get("services") or []),
         ssh=SshSettings(user=ssh.get("user", "") or "", keyPath=ssh.get("keyPath", "") or "",
@@ -244,6 +247,8 @@ def _system(d: Dict[str, Any], i: int) -> System:
         infoProbes=[_probe(p, f"{where} infoProbes[{j}]") for j, p in enumerate(d.get("infoProbes") or [])],
         hooks=hooks,
     )
+    if s.onSuspended not in SUSPENDED_ACTIONS:
+        raise ConfigError(f"{where}: onSuspended must be one of {', '.join(SUSPENDED_ACTIONS)}")
     if typ == "vmware" and not s.vmx:
         raise ConfigError(f"{where}: VMware systems need 'vmx' (path to the .vmx file)")
     if typ == "windows-service" and not s.services:

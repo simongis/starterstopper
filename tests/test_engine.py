@@ -192,3 +192,35 @@ def test_config_validation(bad):
     from starterstopper.config import ConfigError
     with pytest.raises(ConfigError):
         from_dict(bad)
+
+
+class SuspendingProvider(FakeProvider):
+    def __init__(self, suspended=()):
+        super().__init__()
+        self.suspended = set(suspended)
+
+    def states(self, systems):
+        out = super().states(systems)
+        for s in systems:
+            if s.name in self.suspended and s.name not in self.running_set:
+                out[s.name] = State.SUSPENDED
+        return out
+
+    def start(self, system):
+        self.suspended.discard(system.name)
+        return super().start(system)
+
+
+def test_suspended_cold_boot_resumes_stops_then_starts():
+    c = cfg([{"name": "base", "onSuspended": "coldBoot"}])
+    p = SuspendingProvider(suspended={"base"})
+    r = make(c, p).start()
+    assert p.calls == ["start base", "stop base", "start base"]
+    assert r.verdict == "READY"
+
+
+def test_suspended_default_just_resumes():
+    c = cfg([{"name": "base"}])
+    p = SuspendingProvider(suspended={"base"})
+    make(c, p).start()
+    assert p.calls == ["start base"]

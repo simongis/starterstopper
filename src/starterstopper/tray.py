@@ -115,7 +115,8 @@ class App:
             "ready": f"All {n} running",
             "degraded": f"All {n} running -- degraded (see health report)",
             "partial": f"{up} of {n} running",
-            "stopped": "All stopped",
+            "stopped": "All stopped" + (f" ({sus} suspended)" if (sus := sum(
+                1 for s in self.cfg.enabled_systems() if self.states.get(s.name) == State.SUSPENDED)) else ""),
             "unknown": "Checking status...",
             "empty": "No systems configured -- open Preferences",
         }[o]
@@ -138,7 +139,16 @@ class App:
     def poll_once(self) -> None:
         self.reload_config()
         if self.engine:
+            before = {n for n, st in self.states.items() if st == State.SUSPENDED}
             self.states = self.engine.states()
+            now = {n for n, st in self.states.items() if st == State.SUSPENDED}
+            if now - before and not self.busy:
+                # Usually the host slept or hibernated with the VMs running. Processes in the guests
+                # were frozen across the gap and resume with the clock jumped.
+                self.notify("Lab VMs suspended",
+                            f"{', '.join(sorted(now))} suspended (host sleep?). Start resumes them"
+                            + (" and cold-boots those set to coldBoot." if any(
+                                s.onSuspended == "coldBoot" for s in self.cfg.systems if s.name in now) else "."))
         self.refresh_icon()
 
     def _poll_loop(self) -> None:
@@ -219,6 +229,28 @@ class App:
             self.notify(f"Stop: {res.verdict}", res.summary())
         self._run_op("Stopping", op)
 
+    def restart(self) -> None:
+        def op() -> None:
+            assert self.engine
+            log.info("=" * 70)
+            log.info("RESTART all")
+            res = self.engine.stop()
+            self.last_op = res
+            log.info("STOP result: %s (%.0fs)", res.summary(), res.seconds)
+            if res.verdict != "STOPPED":
+                self.notify(f"Restart: stop {res.verdict}", res.summary())
+        if self.busy or not self.engine:
+            return
+        self.last_op = None
+        self._run_op("Stopping", op)
+        threading.Thread(target=self._start_after_stop, daemon=True, name="restart").start()
+
+    def _start_after_stop(self) -> None:
+        while self.busy:                    # wait for the stop operation to release the app
+            time.sleep(1)
+        if self.last_op is not None and self.last_op.op == "stop" and self.last_op.verdict == "STOPPED":
+            self.start()
+
     def health_check(self) -> None:
         def op() -> None:
             log.info("HEALTH CHECK")
@@ -276,6 +308,7 @@ class App:
             yield SEP
             yield I("Start all", lambda: self.start(), enabled=idle)
             yield I("Stop all", lambda: self.stop(), enabled=idle)
+            yield I("Restart all (stop, then cold start)", lambda: self.restart(), enabled=idle)
             if self.busy:
                 yield I("Cancel (stops waiting; never powers off)", lambda: self.cancel())
             if self.cfg.systems:
