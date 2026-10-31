@@ -450,9 +450,9 @@ class PrefsApp:
         type_cb.bind("<<ComboboxSelected>>", lambda e: self._show_type_fields())
         row(1, "Type", type_cb)
         flags = ttk.Frame(f)
-        ttk.Checkbutton(flags, text="Enabled (included in Start all / Stop all)", variable=b["enabled"]).pack(side="left")
+        ttk.Checkbutton(flags, text="Enabled (included in Start all / Stop all)", variable=b["enabled"]).pack(anchor="w")
         ttk.Checkbutton(flags, text="Critical (abort the start chain if not ready)",
-                        variable=b["critical"]).pack(side="left", padx=(12, 0))
+                        variable=b["critical"]).pack(anchor="w")
         row(2, "", flags)
         row(3, "Host", ttk.Entry(f, textvariable=v["host"]), ttk.Label(f, text="IP / DNS name ({host})"))
 
@@ -463,9 +463,12 @@ class PrefsApp:
                        command=lambda: _browse_file(v["vmx"], "VMX file", [("VMware VM", "*.vmx")])))
         row(1, "", ttk.Checkbutton(self.vm_frame, text="Ensure guest RTC is UTC (Linux guests)", variable=b["utc"]))
         row(2, "Stop timeout (min)", _spin(self.vm_frame, v["stop"], 1, 1440))
-        row(3, "If suspended", ttk.Combobox(self.vm_frame, textvariable=v["suspended"], values=SUSPENDED_ACTIONS,
-                                            state="readonly", width=12),
-            ttk.Label(self.vm_frame, text="coldBoot = resume, shut down cleanly, boot fresh"))
+        susp = ttk.Frame(self.vm_frame)
+        ttk.Combobox(susp, textvariable=v["suspended"], values=SUSPENDED_ACTIONS, state="readonly",
+                     width=12).pack(side="left")
+        ttk.Label(susp, text="coldBoot: clean shutdown, then fresh boot").pack(side="left", padx=(PAD, 0))
+        row(3, "If suspended", susp)
+        susp.grid_configure(columnspan=2)
         self.svc_frame = ttk.LabelFrame(f, text="Windows services (internal names, one per line, start order)",
                                         padding=6)
         self.services_txt = tk.Text(self.svc_frame, height=5, width=40, undo=True)

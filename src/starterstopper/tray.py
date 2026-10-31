@@ -57,6 +57,8 @@ class App:
         self._wake = threading.Event()
         self._stop = threading.Event()
         self._icons: Dict[tuple, Image.Image] = {}
+        self._icon_key: Optional[tuple] = None
+        self._icon_lock = threading.RLock()
         self.reload_config(force=True)
 
     # ------------------------------------------------------------------ config
@@ -122,19 +124,27 @@ class App:
         }[o]
 
     def refresh_icon(self) -> None:
+        """Called from the poll thread, the operation worker and progress callbacks: serialise it.
+        pystray's win32 backend destroys the previous icon handle on every image change, so two
+        concurrent updates double-free it (WinError 1402). Only swap the image when it changes."""
         if not self.icon:
             return
-        o = self.overall()
-        warn = self.hypervisor or bool(self.cfg_error)
-        key = (o, warn)
-        if key not in self._icons:
-            self._icons[key] = _icon(COLOURS[o], warn)
-        self.icon.icon = self._icons[key]
-        title = f"StarterStopper -- {self.status_text()}"
-        if self.cfg_error:
-            title += " [config error]"
-        self.icon.title = title[:127]       # Windows tooltip limit
-        self.icon.update_menu()
+        with self._icon_lock:
+            o = self.overall()
+            warn = self.hypervisor or bool(self.cfg_error)
+            key = (o, warn)
+            if key != self._icon_key:
+                if key not in self._icons:
+                    self._icons[key] = _icon(COLOURS[o], warn)
+                self.icon.icon = self._icons[key]
+                self._icon_key = key
+            title = f"StarterStopper -- {self.status_text()}"
+            if self.cfg_error:
+                title += " [config error]"
+            title = title[:127]             # Windows tooltip limit
+            if title != self.icon.title:
+                self.icon.title = title
+            self.icon.update_menu()
 
     def poll_once(self) -> None:
         self.reload_config()

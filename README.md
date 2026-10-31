@@ -1,114 +1,72 @@
 # StarterStopper
 
-A small Windows system-tray app that starts, stops and health-checks a home lab or sandbox: VMware
-Workstation VMs and/or Windows services, in dependency order, with real readiness checks instead of fixed
-sleeps. Built for ArcGIS Enterprise labs, but nothing in it is ArcGIS-specific except the bundled health
-probe.
+**One click to start, stop and health-check your home lab or sandbox, from the Windows system tray.**
 
-- **No console window.** Runs from a Startup-folder shortcut via `pythonw`, unelevated.
-- **Ordered start / stop.** List order is start order; stop is the reverse. Stop is graceful only (no hard
-  power-off), and halts the chain if a system won't stop.
-- **Real readiness.** Each system has probes (HTTP from this PC, or a command over SSH in the guest). All must
-  stay green for a settle window (default 30 s) before the next system starts. A one-off 200 doesn't count.
-- **Hooks.** Run your own scripts at `beforeStart`, `afterBoot`, `afterReady`, `beforeStop`, `afterStop`
-  (for example, a self-repair step for a component that needs it).
-- **Health check without an LLM.** Runs any check command that prints JSON `{check,status,detail}` rows
-  (or just uses its exit code), applies a table of known false alarms and fix hints, and writes an HTML
-  report. Includes `health/Test-ArcGISEnterprise.ps1`, a profile-driven ArcGIS Enterprise REST probe.
-- **Guard rails.** Optional RAM/vCPU ceiling across running VMs; warns if the Windows hypervisor is loaded
-  (VMware Workstation then runs on a slower path); reports pending guest reboots.
-- **Light.** About 40 MB resident; one batched status query a minute when idle. Preferences opens as a
-  separate process.
+StarterStopper starts your VMs and services in the right order, waits until each one genuinely works (not just
+"powered on"), runs your own fix-up scripts, then runs a health check and tells you in one word whether the lab
+is ready. It was built for ArcGIS Enterprise sandboxes, but the engine knows nothing about ArcGIS: anything you
+can probe over HTTP or SSH can be managed.
 
-## Tray icon
+![The StarterStopper tray menu](docs/images/tray-menu-system-actions.png)
 
-| Colour | Meaning |
+> [!WARNING]
+> **Projectware for sandboxes and home labs.** StarterStopper is a personal project, built and tested on one
+> home lab (VMware Workstation on Windows 11, ArcGIS Enterprise 12.1 on Ubuntu guests). It is intended for
+> sandbox, home-lab, demo and learning environments. It is **not** intended for production systems without
+> considerably more rigorous testing in your own environment. It starts and stops machines and runs scripts
+> you configure: review your configuration, keep backups and snapshots, and use it at your own risk. See the
+> [licence](LICENSE): the software is provided "as is", without warranty of any kind.
+
+## What it does
+
+| | |
 |---|---|
-| Green | All systems in *Start all* are running, and the last start/health check was clean |
-| Amber | Running but degraded (see the health report), or only some systems running |
-| Red | All stopped |
-| Yellow | Start / stop / health check in progress (tooltip shows the current step) |
-| Grey | Unknown, or nothing configured |
-| Yellow `!` badge | Config error, or the Windows hypervisor is loaded |
+| **Ordered start and stop** | List order is start order; stop is the reverse. Graceful stop only, never a hard power-off. |
+| **Real readiness** | Every system has probes (HTTP from your PC, or a command over SSH in the guest). All must stay green for a settle window before the next system starts. |
+| **Hooks** | Run your own scripts before start, after boot, after ready, before and after stop. |
+| **Health check, no AI needed** | Runs your check scripts, adds fix hints for known false alarms, and writes an HTML report. Ships with a profile-driven ArcGIS Enterprise REST probe. |
+| **Guard rails** | RAM/vCPU ceiling across running VMs, Windows-hypervisor warning, pending-reboot notice, and safe handling of VMs suspended by host sleep. |
+| **Quiet and light** | No console window, no admin rights for VMs, about 40 MB of memory, one status check a minute when idle. |
+| **Configurable** | Everything is set in a Preferences window and saved outside the repository, so your hosts and paths never end up in git. |
 
-Menu: Start all, Stop all, Cancel, Systems (start/stop each one, show it in Workstation), Run health
-check, Open last health report, your links, Preferences, Open log, Quit.
+Supported today: **VMware Workstation** VMs (via `vmrun`) and **Windows services** on the same PC.
 
-## Install
+## Quick start
 
-Requirements: Windows 10/11, Python 3.9+ (python.org build), PowerShell 7 (`pwsh`) for the bundled health
-probe, VMware Workstation for VM systems, and the Windows OpenSSH client if you use SSH probes.
+Requirements: Windows 10 or 11, Python 3.9+ (python.org build), PowerShell 7 for the bundled health probe,
+VMware Workstation for VM systems, and the Windows OpenSSH client if you use SSH probes.
 
 ```powershell
 git clone <this repository URL>
 cd starterstopper
-.\install.ps1 -InstallDeps -Launch      # Startup shortcut + start now. -DesktopShortcut adds one there too.
+.\install.ps1 -InstallDeps -Launch
 ```
 
-Then right-click the tray icon > **Preferences...** > **Load example**, edit it, and Save. Uninstall with
-`.\uninstall.ps1` (add `-RemoveData` to delete config, logs and reports).
+Then right-click the tray icon, choose **Preferences...**, click **Load example**, edit it to match your lab,
+and save.
 
-## Configuration
+**Full walkthrough with screenshots: [docs/USER_GUIDE.md](docs/USER_GUIDE.md).**
 
-`%APPDATA%\StarterStopper\config.json`, edited in Preferences or by hand (the app reloads it when it changes).
-It is outside the repo on purpose. Start from [`config.example.json`](config.example.json).
+## Roadmap
 
-| Section | Key fields |
-|---|---|
-| `general` | `launchAtLogin`, `startAllAtLogin` (only within 15 min of boot), `idlePollSeconds`, `maxGuestGB` / `maxVcpu` (0 = no ceiling), `vmrunPath` (blank = auto-detect), `checkHypervisor`, `notifications` |
-| `systems[]` | `name`, `type` (`vmware` or `windows-service`), `enabled` (in *Start all*), `critical` (not ready = abort the chain), `host`, `vmx` or `services`, `ensureUtcRtc`, `stopTimeoutMinutes`, `ssh` {`user`, `keyPath`, `port`}, `ready` {`settleSeconds`, `timeoutMinutes`, `intervalSeconds`, `probes`}, `infoProbes`, `hooks` |
-| `health` | `runAfterStart`, `checks[]` {`name`, `cmd`, `format` `json`/`exitcode`, `timeoutMinutes`}, `hintsFile` |
-| `links[]` | `label`, `url` (shown under *Open*) |
+Being considered, in no fixed order. Interest and help are welcome:
 
-Probes: `{ "label": "Portal", "http": "https://{host}:7443/arcgis/portaladmin/healthCheck" }` (passes on
-`expect`, default `[200]`; TLS not verified unless `verifyTls`) or
-`{ "label": "no OS upgrade running", "ssh": "! systemctl is-active -q apt-daily-upgrade.service" }` (passes on
-exit 0). SSH uses key auth only (BatchMode), never a password.
+- **Proxmox VE** provider (start/stop/status through the Proxmox API).
+- **Azure** and **AWS** providers, so cloud sandboxes can be started for a demo and stopped to save cost.
+- Hyper-V provider.
+- A packaged single-file `.exe`, so Python isn't required.
+- More bundled health probes beyond ArcGIS Enterprise.
 
-Placeholders in commands, URLs and paths: `{host}`, `{name}` (per system), `{app}` (this folder),
-`{config_dir}` (the config folder); `%ENV%` and `~` are expanded. Hooks also get `SS_SYSTEM`, `SS_HOST`,
-`SS_PHASE` and `SS_VMX` environment variables, and must be idempotent: they run on every start, even when
-the system was already running.
+Each system type is a small provider class (`src/starterstopper/providers/`) with three methods (`states`,
+`start`, `stop`), so a new platform is a contained piece of work.
 
-**Secrets never go in the config.** The health probe takes credentials as environment-variable names, or
-an `.env` file path, in its own profile. See [health/README.md](health/README.md).
+## Contributing
 
-## Command line
+Collaboration is welcome: bug reports, ideas, new providers, health probes or hint rules. See
+[CONTRIBUTING.md](CONTRIBUTING.md). Please open an issue before a large change so we can agree on the approach.
 
-```powershell
-python StarterStopper.pyw --cli status
-python StarterStopper.pyw --cli start [names...]     # exit 0 = READY
-python StarterStopper.pyw --cli stop  [names...]
-python StarterStopper.pyw --cli health
-```
+## Licence and trademarks
 
-Logs: `%LOCALAPPDATA%\StarterStopper\logs\starterstopper.log`. Reports:
-`%LOCALAPPDATA%\StarterStopper\reports\` (`last.html` is the newest).
-
-## Windows services
-
-`windows-service` systems (for example ArcGIS Enterprise installed on a laptop) read their status without
-admin rights. Start/stop asks for elevation once per action (UAC), runs hidden, and starts services in the
-listed order (stops in reverse).
-
-## Development
-
-```powershell
-pip install -r requirements.txt -r requirements-dev.txt
-python -m pytest
-git config core.hooksPath .githooks      # enable the leak check before every commit
-```
-
-Leak checks guard the public GitHub copy:
-
-- **pre-push to github.com:** [gitleaks](https://github.com/gitleaks/gitleaks) scans every commit being pushed
-  (`winget install gitleaks`; the push is blocked if it is missing). `tools/check_sanitised.py` then checks each
-  changed file for private IPs, likely secrets, and terms from your own gitignored `.sanitise-deny.txt` (see
-  `.sanitise-deny.example.txt`). Pushes to other remotes, such as a private mirror, are not checked.
-- **GitHub:** `.github/workflows/gitleaks.yml` scans every push and PR. Also keep secret-scanning push protection
-  on in your GitHub settings.
-
-The check covers the whole history being pushed, so keep private details out of commits on any branch you
-intend to publish.
-
-Use documentation IPs (`192.0.2.x`) and `example.com` in anything committed.
+[MIT](LICENSE). ArcGIS, ArcGIS Enterprise, ArcGIS Velocity and ArcGIS Knowledge are trademarks of Esri.
+VMware Workstation is a trademark of Broadcom. StarterStopper is an independent project and is not affiliated
+with, endorsed by or supported by Esri, Broadcom or any other vendor named here.
