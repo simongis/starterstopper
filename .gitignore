@@ -14,3 +14,10 @@ env/
 
 # Runtime log (generated beside launch.bat)
 *.log
+
+# Private, never commit: your real config, deny-list, reports
+config.json
+config.json.bak
+.sanitise-deny.txt
+reports/
+*.env

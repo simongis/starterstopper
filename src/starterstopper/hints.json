@@ -1,0 +1,171 @@
+[
+  {
+    "match": "datastore-queue|datastore-cache",
+    "field": "any",
+    "status": [
+      "WARN"
+    ],
+    "hint": "Queue and in-memory cache stores have no usable per-machine validate operation, so this is reported as WARN when the machine is registered and activated. Confirm the store process is running on the data store machine (for example `ps -eo args | grep cachestore`)."
+  },
+  {
+    "match": "in-memory cache.*not installed|cache store is not installed",
+    "field": "detail",
+    "status": [
+      "FAIL",
+      "WARN"
+    ],
+    "hint": "Often a misleading message: the cache store can be registered with its process running. Check the cachestore process on the data store machine and that the data store admin endpoint on port 2443 responds before treating it as broken."
+  },
+  {
+    "match": "datastore-|datastore validate|validate.*data ?store",
+    "field": "any",
+    "status": [
+      "FAIL"
+    ],
+    "hint": "A registered data store failed validation on one or more machines. Confirm with the Data Store admin endpoint (port 2443 /arcgis/datastoreadmin/configure) and the machine's validate result in Server Manager. Note describedatastore can wrongly report the service as not running."
+  },
+  {
+    "match": "describedatastore|data store service is not running",
+    "field": "detail",
+    "status": [
+      "FAIL",
+      "WARN"
+    ],
+    "hint": "The describedatastore tool can misreport that the Data Store service is not running. Check the :2443 datastoreadmin endpoint returns 200 and that per-store validation passes before acting."
+  },
+  {
+    "match": "velocity-analytic-",
+    "field": "check",
+    "status": [
+      "FAIL"
+    ],
+    "hint": "Only validation messages at level ERROR, or executable=false, matter; WARN messages such as ANALYTIC_INCLUDES_STATEFUL_CONFIGURATION are benign. Open the analytic in Velocity, fix the ERROR, re-validate, then start it. If it will not start over REST, try a full sign-in token rather than a referer token."
+  },
+  {
+    "match": "velocity-(feed|analytic)-",
+    "field": "check",
+    "status": [
+      "WARN"
+    ],
+    "hint": "An item that is not started but is not in requireStarted is reported as WARN. Start it if you need it. If a started item shows no data flowing, check the Velocity gateway (Kafka) is up, as status can read started while the gateway is down."
+  },
+  {
+    "match": "NO_REFRESH_TOKEN|\\b412\\b",
+    "field": "detail",
+    "status": [
+      "FAIL",
+      "WARN"
+    ],
+    "hint": "The Velocity item's stored refresh token has expired. Start the item once from the Velocity UI while signed in, then re-run the check."
+  },
+  {
+    "match": "NOT_EXECUTABLE",
+    "field": "detail",
+    "status": [
+      "FAIL",
+      "WARN"
+    ],
+    "hint": "A token created by generateToken with a referer can stop an analytic but not start it. Start it with a full sign-in token (for example the ArcGIS API for Python session token), re-validate, then retry."
+  },
+  {
+    "match": "logs-severe",
+    "field": "check",
+    "status": [
+      "WARN"
+    ],
+    "hint": "SEVERE log entries in the window. Check the timestamp: messages near boot are often transient (for example a graph store connection error logged once because the hosting Server started before the graph store). Only investigate if recent or recurring."
+  },
+  {
+    "match": "ArangoDBException|Cannot connect",
+    "field": "detail",
+    "status": [
+      "WARN",
+      "FAIL"
+    ],
+    "hint": "Logged once at boot if the hosting Server starts before the graph store. Confirm the timestamp is near boot and that the graph data store validates PASS; ignore if so."
+  },
+  {
+    "match": "^cert-",
+    "field": "check",
+    "status": [
+      "FAIL",
+      "WARN"
+    ],
+    "hint": "Certificate is near expiry, does not match the host name, or is not trusted from the machine running the check. Read the detail for days remaining, trusted= and nameMatch=. Renew or re-import the certificate; for private ports behind a proxy use connectTo, and add an internal CA to trustedCaFiles."
+  },
+  {
+    "match": "trusted=False",
+    "field": "detail",
+    "status": [
+      "FAIL"
+    ],
+    "hint": "The certificate chain is not trusted from this machine. For an internal CA, add the CA certificate to the profile's trustedCaFiles or to the Windows trusted root store; for a public CA, check the intermediate certificates are served."
+  },
+  {
+    "match": "licen[cs]e",
+    "field": "check",
+    "status": [
+      "FAIL",
+      "WARN"
+    ],
+    "hint": "A Portal or Server licence is expiring or has expired. Check the expiry date in the detail, then renew or re-authorise the licence (Portal: user type and extension licences; Server: ArcGIS Server authorization file) before it lapses."
+  },
+  {
+    "match": "^federation",
+    "field": "check",
+    "status": [
+      "FAIL"
+    ],
+    "hint": "Portal could not validate a federated server, or an expected server is not federated. Check the server is running and reachable from the Portal machine, its web context URL and admin URL are correct, and certificates are trusted by both sides. Re-run federation validation in Portal Administrator."
+  },
+  {
+    "match": "-healthCheck$",
+    "field": "check",
+    "status": [
+      "FAIL"
+    ],
+    "hint": "The healthCheck endpoint did not return success. Confirm the service is running, the URL and reverse proxy or Web Adaptor path are correct, and that the machine has finished starting. A 502 minutes after a start can mean OS patching restarted Portal or the Data Store; check the service journal or event log for repeated restarts."
+  },
+  {
+    "match": "\\b502\\b|Bad Gateway",
+    "field": "detail",
+    "status": [
+      "FAIL",
+      "WARN"
+    ],
+    "hint": "The proxy cannot reach the backend. A start that appeared healthy can be followed by OS patching restarting Portal or Data Store services. Look for repeated Stopping/Starting entries with no admin action, and disable unattended restarts on machines that are often off."
+  },
+  {
+    "match": "portal-token",
+    "field": "check",
+    "status": [
+      "FAIL"
+    ],
+    "hint": "Admin checks were skipped because no token was issued. Confirm the credential environment variable names in the profile are set in the environment running StarterStopper, and that the account is not locked."
+  },
+  {
+    "match": "-machine-",
+    "field": "check",
+    "status": [
+      "FAIL"
+    ],
+    "hint": "An ArcGIS Server machine is not in the STARTED state. Check the ArcGIS Server service on that machine and its logs; if it was started recently, wait for it to finish starting and re-run."
+  },
+  {
+    "match": "-services$",
+    "field": "check",
+    "status": [
+      "FAIL"
+    ],
+    "hint": "Services configured STARTED are not running. Open Server Manager, check the service logs, and restart the listed services. If many fail together, the server may still be starting."
+  },
+  {
+    "match": "^layer-",
+    "field": "check",
+    "status": [
+      "WARN",
+      "FAIL"
+    ],
+    "hint": "A probed layer returned too few rows or failed to query. Check the service is started, the layer's data source is reachable and sharing permits the account used."
+  }
+]

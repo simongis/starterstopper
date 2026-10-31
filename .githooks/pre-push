@@ -1,0 +1,30 @@
+#!/bin/sh
+# Public-release gate. Pushes to GitHub (public) must be generic: gitleaks scans every commit being
+# pushed and tools/check_sanitised.py blocks private IPs, likely secrets and your .sanitise-deny.txt
+# terms in every changed file. Pushes to any other remote (e.g. a private Forgejo) are not checked.
+# Enable once per clone:  git config core.hooksPath .githooks
+# https://github.com/gitleaks/gitleaks
+remote_url="$2"
+case "$remote_url" in
+    *github.com*) ;;
+    *) exit 0 ;;
+esac
+echo "pre-push: public remote ($remote_url) -- running gitleaks and the sanitise check" >&2
+command -v gitleaks >/dev/null 2>&1 || { echo "pre-push: gitleaks not installed -- push blocked (winget install gitleaks)" >&2; exit 1; }
+zero=0000000000000000000000000000000000000000
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue                      # branch deletion
+    if [ "$remote_sha" = "$zero" ]; then range="$local_sha"; else range="$remote_sha..$local_sha"; fi
+    if ! gitleaks git --redact --no-banner --log-opts="$range" .; then
+        echo "Push blocked by gitleaks for $local_ref (see findings above)." >&2
+        exit 1
+    fi
+    # Deny-list / private-IP check over every file changed in the pushed range
+    files=$(git diff --name-only --diff-filter=ACMR "$( [ "$remote_sha" = "$zero" ] && git hash-object -t tree /dev/null || echo "$remote_sha")" "$local_sha")
+    if [ -n "$files" ]; then
+        PY=python; command -v "$PY" >/dev/null 2>&1 || PY=python3
+        # shellcheck disable=SC2086
+        "$PY" tools/check_sanitised.py $files || { echo "Push blocked by check_sanitised.py." >&2; exit 1; }
+    fi
+done
+exit 0

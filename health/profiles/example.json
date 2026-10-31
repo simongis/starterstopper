@@ -1,0 +1,28 @@
+{
+  "name": "Example base deployment -- copy and edit",
+  "portalUrl": "https://gis.example.com.au/portal",
+  "expectedVersion": "12.1",
+  "envFile": null,
+  "credentials": { "userEnv": "AGE_ADMIN_USER", "passwordEnv": "AGE_ADMIN_PASSWORD" },
+  "warnDays": 60,
+  "failDays": 14,
+  "logHours": 24,
+  "servers": [
+    {
+      "name": "hosting",
+      "url": "https://gis.example.com.au/server",
+      "checkDataStores": true,
+      "expectedDataStores": ["relational", "object"],
+      "includeSystemFolders": false
+    }
+  ],
+  "expectedFederatedServers": ["https://gis.example.com.au/server"],
+  "velocity": null,
+  "extraCertUrls": [
+    { "url": "https://portal-host.example.internal:7443/", "connectTo": "192.0.2.10" }
+  ],
+  "trustedCaFiles": [],
+  "probeLayers": [
+    { "name": "parcels", "url": "https://gis.example.com.au/server/rest/services/Hosted/Parcels/FeatureServer/0", "minCount": 1 }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "general": {
+    "launchAtLogin": true,
+    "startAllAtLogin": false,
+    "idlePollSeconds": 60,
+    "busyPollSeconds": 5,
+    "maxGuestGB": 48,
+    "maxVcpu": 16,
+    "vmrunPath": "",
+    "checkHypervisor": true,
+    "notifications": true
+  },
+  "systems": [
+    {
+      "name": "base",
+      "type": "vmware",
+      "vmx": "C:\\VMs\\base\\base.vmx",
+      "host": "192.0.2.10",
+      "critical": true,
+      "ensureUtcRtc": true,
+      "ssh": { "user": "admin", "keyPath": "~\\.ssh\\id_ed25519" },
+      "ready": {
+        "settleSeconds": 30,
+        "timeoutMinutes": 15,
+        "probes": [
+          { "label": "Portal", "http": "https://{host}:7443/arcgis/portaladmin/healthCheck" },
+          { "label": "Server", "http": "https://{host}:6443/arcgis/rest/info/healthCheck" },
+          { "label": "Data Store", "http": "https://{host}:2443/arcgis/datastoreadmin/configure" },
+          { "label": "no OS upgrade running", "ssh": "! systemctl is-active -q apt-daily-upgrade.service" }
+        ]
+      },
+      "infoProbes": [
+        { "label": "reboot required", "ssh": "test ! -f /var/run/reboot-required" }
+      ]
+    },
+    {
+      "name": "velocity",
+      "type": "vmware",
+      "vmx": "C:\\VMs\\velocity\\velocity.vmx",
+      "host": "192.0.2.11",
+      "ready": {
+        "probes": [
+          { "label": "Velocity", "http": "https://{host}:7143/arcgis/rest/info" }
+        ]
+      },
+      "hooks": {
+        "afterReady": [ { "cmd": "pwsh -NoProfile -File C:\\path\\to\\your-post-start-script.ps1", "required": false } ]
+      }
+    },
+    {
+      "name": "ArcGIS on this PC",
+      "type": "windows-service",
+      "enabled": false,
+      "host": "localhost",
+      "services": ["ArcGISDataStore", "ArcGIS Server", "Portal for ArcGIS"],
+      "ready": {
+        "probes": [
+          { "label": "Portal", "http": "https://localhost:7443/arcgis/portaladmin/healthCheck" }
+        ]
+      }
+    }
+  ],
+  "health": {
+    "runAfterStart": true,
+    "checks": [
+      {
+        "name": "ArcGIS Enterprise REST",
+        "cmd": "pwsh -NoProfile -File \"{app}\\health\\Test-ArcGISEnterprise.ps1\" -Profile \"{config_dir}\\health-profile.json\" -Json",
+        "format": "json",
+        "timeoutMinutes": 10
+      }
+    ]
+  },
+  "links": [
+    { "label": "Portal", "url": "https://gis.example.com/portal/home" }
+  ]
+}

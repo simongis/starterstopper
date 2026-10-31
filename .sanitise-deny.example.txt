@@ -1,0 +1,13 @@
+# Copy to .sanitise-deny.txt (gitignored) and add YOUR private terms.
+# tools/check_sanitised.py blocks any commit containing these strings
+# (case-insensitive, substring match) and never prints them in full.
+#
+# One term per line. Lines starting with # are comments.
+# Good candidates: private domains and hostnames, machine names, usernames,
+# customer or employer names, internal share paths.
+#
+# Examples (replace with your own):
+mylab.example.net
+MYPC01
+my-nas
+\\fileserver\private
