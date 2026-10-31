@@ -15,6 +15,7 @@ from typing import Callable, Dict, List, Optional
 import pystray
 from PIL import Image, ImageDraw
 
+from . import __version__
 from . import config as cfgmod
 from . import health, shortcuts
 from .config import APP_DIR, CONFIG_PATH, LOG_DIR, Config, ConfigError
@@ -23,6 +24,8 @@ from .providers import State
 from .providers.vmware_ws import hypervisor_present
 
 log = logging.getLogger(__name__)
+
+PROJECT_URL = "https://github.com/simongis/starterstopper"
 
 COLOURS = {
     "ready": "#2e8b57", "degraded": "#e08a00", "partial": "#e08a00", "stopped": "#c0392b",
@@ -331,6 +334,7 @@ class App:
             yield SEP
             yield I("Preferences...", self.prefs_cb)
             yield I("Open log", lambda: os.startfile(str(LOG_DIR / "starterstopper.log")))
+            yield I(f"About StarterStopper {__version__}", lambda: os.startfile(PROJECT_URL))
             yield I("Quit", self.quit_cb, enabled=lambda _i: not self.busy)
 
         return M(items)

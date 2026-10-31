@@ -62,7 +62,9 @@ def _cli(op: str, names: list) -> int:
 
 
 def main(argv=None) -> int:
+    from . import __version__
     ap = argparse.ArgumentParser(prog="StarterStopper")
+    ap.add_argument("--version", action="version", version=f"StarterStopper {__version__}")
     ap.add_argument("--prefs", action="store_true", help="open Preferences")
     ap.add_argument("--cli", choices=["start", "stop", "health", "status"], help="run once in the console")
     ap.add_argument("names", nargs="*", help="system names (default: all enabled)")
@@ -74,6 +76,7 @@ def main(argv=None) -> int:
     _logging(console=bool(a.cli))
     if a.cli:
         return _cli(a.cli, a.names)
+    logging.getLogger(__name__).info("StarterStopper %s starting", __version__)
     if not _single_instance():
         ctypes.windll.user32.MessageBoxW(0, "StarterStopper is already running (see the system tray).",
                                          "StarterStopper", 0x40)

@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import subprocess
 import time
 from pathlib import Path
 from typing import Dict, List, Set
@@ -106,7 +107,8 @@ class VMwareWorkstation(Provider):
     def show_in_workstation(self, system: System) -> None:
         """Open the VM in the Workstation UI (VMs started by vmrun don't appear in its library)."""
         exe = Path(self.vmrun).with_name("vmware.exe")
-        os.startfile(str(exe), arguments=f'-t "{expand(system.vmx, system)}"')  # type: ignore[call-arg]
+        subprocess.Popen([str(exe), "-t", expand(system.vmx, system)], close_fds=True,
+                         creationflags=getattr(subprocess, "DETACHED_PROCESS", 0x8))
 
 
 def hypervisor_present() -> bool:

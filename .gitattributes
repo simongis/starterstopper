@@ -1,0 +1,9 @@
+# Keep development-only files out of release zips (git archive)
+/tests            export-ignore
+/.github          export-ignore
+/.githooks        export-ignore
+/pytest.ini       export-ignore
+/requirements-dev.txt export-ignore
+/.sanitise-deny.example.txt export-ignore
+/tools/check_sanitised.py export-ignore
+/tools/release_notes.py   export-ignore

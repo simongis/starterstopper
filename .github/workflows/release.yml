@@ -1,0 +1,51 @@
+name: release
+# Push a tag vMAJOR.MINOR.PATCH (matching __version__ and a CHANGELOG.md section) to publish a GitHub Release.
+on:
+  push:
+    tags: ["v*.*.*"]
+permissions:
+  contents: read
+jobs:
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release:
+    needs: secrets-scan
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Tag matches version and changelog
+        run: python tools/release_notes.py check ${{ github.ref_name }}
+      - run: python -m pip install -r requirements.txt -r requirements-dev.txt
+      - run: python -m pytest -q
+      - run: python tools/check_sanitised.py --all
+      - name: Build release zip
+        shell: pwsh
+        run: |
+          $ver = '${{ github.ref_name }}'.TrimStart('v')
+          New-Item -ItemType Directory dist | Out-Null
+          git archive --format zip --prefix "starterstopper-$ver/" -o "dist/starterstopper-$ver.zip" '${{ github.ref_name }}'
+          (Get-FileHash "dist/starterstopper-$ver.zip" -Algorithm SHA256).Hash.ToLower() + "  starterstopper-$ver.zip" |
+            Set-Content "dist/starterstopper-$ver.zip.sha256" -Encoding ascii
+          python tools/release_notes.py notes '${{ github.ref_name }}' > notes.md
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ver = '${{ github.ref_name }}'.TrimStart('v')
+          gh release create '${{ github.ref_name }}' dist/* --verify-tag --title "StarterStopper $ver" --notes-file notes.md
